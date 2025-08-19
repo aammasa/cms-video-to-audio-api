@@ -1,4 +1,4 @@
-# Vimeo Audio Downloader API
+## Vimeo Audio Downloader API
 
 ## Setup
 ```bash
