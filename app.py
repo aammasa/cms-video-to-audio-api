@@ -43,7 +43,8 @@ def download_vimeo_audio(vimeo_url, output_file):
             'Accept': '*/*',
             'Accept-Language': 'en-US,en;q=0.9',
             'Referer': 'https://vimeo.com'
-        }
+        },
+        'ffmpeg_location': './'  # Use bundled ffmpeg/ffprobe
     }
 
     try:
