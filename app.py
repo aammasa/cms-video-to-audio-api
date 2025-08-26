@@ -151,7 +151,7 @@ async def docx_pdf_health():
     return {"status": "DOCX to PDF endpoint is alive"}
 
 
-DOCX to PDF conversion endpoint
+#DOCX to PDF conversion endpoint
 @app.post("/convert-docx-to-pdf")
 async def convert_docx_to_pdf(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     try:
