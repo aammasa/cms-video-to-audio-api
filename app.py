@@ -137,3 +137,7 @@ async def validate_url(video_request: VideoRequest, request: Request):
 async def health_check(request: Request):
     logger.info(f"Health check from {request.client.host}")
     return {"status": "Service is up and running"}
+
+@app.get("/docx-pdf-health")
+async def docx_pdf_health():
+	return {"status": "DOCX to PDF endpoint is alive"}
