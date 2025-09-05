@@ -10,6 +10,7 @@ import yt_dlp
 from docx import Document
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
+from moviepy import VideoFileClip
 
 
 # Configure logging
@@ -195,3 +196,39 @@ async def docx_pdf_health():
 #         )
 #     except Exception as e:
 #         return JSONResponse(content={"error": str(e)}, status_code=500)
+
+@app.post("/convert-video-to-audio")
+async def convert_video_to_audio(request: Request, background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+    logger.info(f"Incoming /convert-video-to-audio request from {request.client.host}")
+    try:
+        temp_video_filename = f"video_{uuid.uuid4().hex}.mp4"
+        temp_audio_filename = f"audio_{uuid.uuid4().hex}.mp3"
+        with open(temp_video_filename, "wb") as f:
+            f.write(await file.read())
+
+        try:
+            video_clip = VideoFileClip(temp_video_filename)
+            video_clip.audio.write_audiofile(temp_audio_filename)
+            video_clip.close()
+        except Exception as e:
+            logger.error(f"Error extracting audio: {e}")
+            if os.path.exists(temp_video_filename):
+                os.remove(temp_video_filename)
+            return JSONResponse(content={"error": str(e)}, status_code=500)
+
+        def cleanup():
+            if os.path.exists(temp_video_filename):
+                os.remove(temp_video_filename)
+            if os.path.exists(temp_audio_filename):
+                os.remove(temp_audio_filename)
+        background_tasks.add_task(cleanup)
+
+        logger.info(f"Returning audio file: {temp_audio_filename}")
+        return FileResponse(
+            temp_audio_filename,
+            media_type="audio/mpeg",
+            filename="audio.mp3"
+        )
+    except Exception as e:
+        logger.error(f"Exception in /convert-video-to-audio: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
