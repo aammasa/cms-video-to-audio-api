@@ -1,4 +1,12 @@
+from pydantic import BaseModel
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
+import io
 
+class GoogleDriveRequest(BaseModel):
+    url: str
+    creds: dict
 
 import logging
 import os
@@ -231,4 +239,75 @@ async def convert_video_to_audio(request: Request, background_tasks: BackgroundT
         )
     except Exception as e:
         logger.error(f"Exception in /convert-video-to-audio: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+    
+def download_google_drive_video(drive_url, output_file, creds_dict):
+    """
+    Downloads a video file from Google Drive using OAuth2 credentials.
+    drive_url: The Google Drive share link (must contain file ID)
+    output_file: Path to save the downloaded video
+    creds_dict: Dictionary containing OAuth2 credentials
+    """
+    import re
+    # Extract file ID from the URL
+    match = re.search(r'/d/(.*?)/|id=([\w-]+)', drive_url)
+    file_id = None
+    if match:
+        file_id = match.group(1) or match.group(2)
+    if not file_id:
+        raise Exception("Could not extract file ID from Google Drive URL")
+
+    creds = Credentials.from_authorized_user_info(creds_dict)
+    service = build('drive', 'v3', credentials=creds)
+    request = service.files().get_media(fileId=file_id)
+    fh = io.FileIO(output_file, 'wb')
+    downloader = MediaIoBaseDownload(fh, request)
+    done = False
+    while not done:
+        status, done = downloader.next_chunk()
+    fh.close()
+    return output_file
+
+@app.post("/download-google-drive-video")
+async def download_google_drive_video_api(request: Request, body: GoogleDriveRequest):
+    logger.info(f"Incoming /download-google-drive-video request from {request.client.host}")
+    logger.info(f"Payload: {body}")
+    try:
+        filename = f"gdrive_video_{uuid.uuid4().hex}.mp4"
+        file_path = os.path.abspath(filename)
+        mp3_filename = f"gdrive_audio_{uuid.uuid4().hex}.mp3"
+        mp3_file_path = os.path.abspath(mp3_filename)
+        video_file = download_google_drive_video(body.url, file_path, body.creds)
+
+        if not os.path.exists(video_file):
+            logger.error("Failed to download video file from Google Drive")
+            return JSONResponse(content={"error": "Failed to download video file"}, status_code=500)
+
+        # Convert video to MP3
+        try:
+            video_clip = VideoFileClip(video_file)
+            video_clip.audio.write_audiofile(mp3_file_path)
+            video_clip.close()
+        except Exception as e:
+            logger.error(f"Error converting video to MP3: {e}")
+            if os.path.exists(video_file):
+                os.remove(video_file)
+            return JSONResponse(content={"error": str(e)}, status_code=500)
+
+        # Clean up video file after conversion
+        if os.path.exists(video_file):
+            os.remove(video_file)
+
+        if not os.path.exists(mp3_file_path):
+            logger.error("Failed to create MP3 file from video")
+            return JSONResponse(content={"error": "Failed to create MP3 file from video"}, status_code=500)
+
+        logger.info(f"Returning MP3 file: {mp3_file_path}")
+        return FileResponse(
+            mp3_file_path,
+            media_type="audio/mpeg",
+            filename="audio.mp3"
+        )
+    except Exception as e:
+        logger.error(f"Exception in /download-google-drive-video: {e}")
         return JSONResponse(content={"error": str(e)}, status_code=500)
