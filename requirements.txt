@@ -9,3 +9,7 @@ reportlab
 moviepy
 imageio-ffmpeg
 python-multipart
+
+google-api-python-client
+google-auth
+moviepy
